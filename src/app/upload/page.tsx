@@ -8,6 +8,7 @@ export default function Upload() {
   const [audioFilePathName, setAudioFilePathName] = useState<string>('');
   const [text, setText] = useState<string>('');
   const [executionTime, setExecutionTime] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -27,6 +28,7 @@ export default function Upload() {
 
   const translate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setIsLoading(true);
     try {
       if (audioFile) {
         const res = await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/transcribe/`, audioFile);
@@ -34,6 +36,7 @@ export default function Upload() {
         if (status === 200) {
           setText(data.text);
           setExecutionTime(data.execution_time_seconds);
+          setIsLoading(false);
         }
       } else {
         alert('오디오 파일을 업로드해주세요.');
@@ -64,10 +67,14 @@ export default function Upload() {
             텍스트 추출
           </button>
         </form>
-        <div className='flex flex-col gap-y-[10px]'>
-          <div>추출한 텍스트: {text}</div>
-          <div>실행 시간: {executionTime}</div>
-        </div>
+        {isLoading ? (
+          <div>Loading...</div>
+        ) : (
+          <div className='flex flex-col gap-y-[10px]'>
+            <div>추출한 텍스트: {text}</div>
+            <div>실행 시간: {executionTime}</div>
+          </div>
+        )}
       </div>
     </div>
   );
