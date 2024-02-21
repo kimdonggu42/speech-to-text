@@ -1,64 +1,68 @@
 'use client';
 
 import axios from 'axios';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
-
-function AudioRecord() {
+export default function AudioRecord() {
   const [stream, setStream] = useState<any>();
-  const [media, setMedia] = useState<any>();
+  // const [media, setMedia] = useState<any>();
   const [onRec, setOnRec] = useState<any>(false);
   const [source, setSource] = useState<any>();
   const [analyser, setAnalyser] = useState<any>();
   const [audioUrl, setAudioUrl] = useState<any>();
-
   const [text, setText] = useState<string>('');
 
-  const onRecAudio = () => {
-    const audioCtx = new window.AudioContext();
-    const analyser = audioCtx.createScriptProcessor(0, 1, 1);
-    setAnalyser(analyser);
+  const [mediaRecorder, setMediaRecorder] = useState<any>(null);
 
-    const makeSound = (stream: any) => {
-      const source = audioCtx.createMediaStreamSource(stream);
-      setSource(source);
-      source.connect(analyser);
-      analyser.connect(audioCtx.destination);
-    };
+  const audioRef = useRef<any>();
+  const audioChunks: any = [];
 
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorder.start();
-      setStream(stream);
-      setMedia(mediaRecorder);
-      makeSound(stream);
+  const onRecAudio = async () => {
+    // const audioCtx = new window.AudioContext();
+    // const analyser = audioCtx.createScriptProcessor(0, 1, 1);
+    // setAnalyser(analyser);
 
-      analyser.onaudioprocess = (e: any) => {
-        setAudioUrl(e.data);
-        setOnRec(true);
+    // const makeSound = (stream: any) => {
+    //   const source = audioCtx.createMediaStreamSource(stream);
+    //   setSource(source);
+    //   source.connect(analyser);
+    //   analyser.connect(audioCtx.destination);
+    // };
+
+    try {
+      // 마이크 mediaStream 생성, Promise를 반환
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // MediaRecorder 생성, 마이크 mediaStream을 인자로 전달
+      const createMediaRecorder = new MediaRecorder(mediaStream);
+      setMediaRecorder(createMediaRecorder);
+
+      // 이벤트 핸들러, 녹음 데이터 취득 처리
+      createMediaRecorder.ondataavailable = (e: any) => {
+        audioChunks.push(e.data);
       };
-    });
+
+      // 이벤트 핸들러, 녹음 종료 처리
+      createMediaRecorder.onstop = () => {
+        // 녹음이 종료되면, 배열에 담긴 오디오 데이터(Blob)들을 합침 + 코덱 설정
+        const audioBlob = new Blob(audioChunks, { type: 'audio/ogg codecs=opus' });
+        audioChunks.splice(0); // 기존 오디오 데이터 초기화
+
+        // Blob 데이터에 접근할 수 있는 객체 URL을 생성
+        const audioBlobURL = window.URL.createObjectURL(audioBlob);
+        audioRef.current.src = audioBlobURL;
+      };
+
+      createMediaRecorder.start();
+    } catch (error) {
+      console.error('마이크 사용을 허용해주세요.');
+    }
   };
 
   const offRecAudio = () => {
-    media.ondataavailable = (e: any) => {
-      setAudioUrl(e.data);
-      setOnRec(false);
-    };
-
-    stream.getAudioTracks().forEach((track: any) => {
-      track.stop();
-    });
-
-    media.stop();
-    analyser.disconnect();
-    source.disconnect();
+    mediaRecorder.stop();
   };
 
-  const onSubmitAudioFile = async (e: any) => {
-    e.preventDefault();
-
+  const onSubmitAudioFile = async () => {
     const recordFile = new File([audioUrl], 'audio.mp3', {
       type: 'audio/mpeg',
     });
@@ -69,7 +73,7 @@ function AudioRecord() {
     console.log(recordFile);
 
     try {
-      const res = await axios.post(`${BASE_URL}/transcribe/`, formData);
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/transcribe/`, formData);
       console.log(res);
       const { status, data } = res;
       if (status === 200) {
@@ -85,23 +89,21 @@ function AudioRecord() {
 
   return (
     <div>
-      <form className='flex gap-x-[20px]' onSubmit={onSubmitAudioFile}>
-        {onRec ? (
-          <button type='button' className='bg-blue-500' onClick={offRecAudio}>
-            녹음 종료
-          </button>
-        ) : (
-          <button type='button' className='bg-red-500' onClick={onRecAudio}>
-            녹음 시작
-          </button>
-        )}
-        <button className='bg-teal-900 text-white' type='submit'>
+      <div className='flex gap-x-[20px]'>
+        <button type='button' className='bg-red-500' onClick={onRecAudio}>
+          녹음 시작
+        </button>
+
+        <button type='button' className='bg-blue-500' onClick={offRecAudio}>
+          녹음 종료
+        </button>
+
+        <button className='bg-teal-900 text-white' onClick={onSubmitAudioFile}>
           녹음 파일 변환
         </button>
-      </form>
+      </div>
+      <audio controls ref={audioRef} />
       <div>{text}</div>
     </div>
   );
 }
-
-export default AudioRecord;
