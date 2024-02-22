@@ -4,52 +4,32 @@ import axios from 'axios';
 import { useState, useRef } from 'react';
 
 export default function AudioRecord() {
-  const [stream, setStream] = useState<any>();
-  // const [media, setMedia] = useState<any>();
-  const [onRec, setOnRec] = useState<any>(false);
-  const [source, setSource] = useState<any>();
-  const [analyser, setAnalyser] = useState<any>();
-  const [audioUrl, setAudioUrl] = useState<any>();
-  const [text, setText] = useState<string>('');
-
   const [mediaRecorder, setMediaRecorder] = useState<any>(null);
+  const [blob, setBlob] = useState<any>(null);
+  const [resultText, setResultText] = useState<string>('');
 
   const audioRef = useRef<any>();
-  const audioChunks: any = [];
+  const chunks: any = [];
 
   const onRecAudio = async () => {
-    // const audioCtx = new window.AudioContext();
-    // const analyser = audioCtx.createScriptProcessor(0, 1, 1);
-    // setAnalyser(analyser);
-
-    // const makeSound = (stream: any) => {
-    //   const source = audioCtx.createMediaStreamSource(stream);
-    //   setSource(source);
-    //   source.connect(analyser);
-    //   analyser.connect(audioCtx.destination);
-    // };
-
     try {
-      // 마이크 mediaStream 생성, Promise를 반환
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // MediaRecorder 생성, 마이크 mediaStream을 인자로 전달
+      // MediaRecorder 객체 생성, 마이크 mediaStream을 인자로 전달
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true }); // 마이크 mediaStream 생성(접근 권한), Promise를 반환
       const createMediaRecorder = new MediaRecorder(mediaStream);
       setMediaRecorder(createMediaRecorder);
 
-      // 이벤트 핸들러, 녹음 데이터 취득 처리
-      createMediaRecorder.ondataavailable = (e: any) => {
-        audioChunks.push(e.data);
+      // 오디오 데이터(Blob)가 들어올 때마다 오디오 데이터 조각들을 chunks 배열에 담는 이벤트 핸들러 등록
+      createMediaRecorder.ondataavailable = (e) => {
+        chunks.push(e.data);
       };
 
-      // 이벤트 핸들러, 녹음 종료 처리
+      // 녹음 종료 시 배열에 담긴 오디오 데이터(Blob)들을 합치는 이벤트 핸들러 등록 + 코덱 설정
       createMediaRecorder.onstop = () => {
-        // 녹음이 종료되면, 배열에 담긴 오디오 데이터(Blob)들을 합침 + 코덱 설정
-        const audioBlob = new Blob(audioChunks, { type: 'audio/ogg codecs=opus' });
-        audioChunks.splice(0); // 기존 오디오 데이터 초기화
-
-        // Blob 데이터에 접근할 수 있는 객체 URL을 생성
-        const audioBlobURL = window.URL.createObjectURL(audioBlob);
-        audioRef.current.src = audioBlobURL;
+        const createBlob = new Blob(chunks, { type: 'audio/*' });
+        setBlob(createBlob);
+        chunks.splice(0); // 통합 Blob 객체를 생성한 후 기존 오디오 데이터 배열 초기화
+        const audioURL = window.URL.createObjectURL(createBlob); // Blob 데이터에 접근할 수 있는 객체 URL을 생성
+        audioRef.current.src = audioURL;
       };
 
       createMediaRecorder.start();
@@ -62,23 +42,16 @@ export default function AudioRecord() {
     mediaRecorder.stop();
   };
 
-  const onSubmitAudioFile = async () => {
-    const recordFile = new File([audioUrl], 'audio.mp3', {
-      type: 'audio/mpeg',
-    });
+  const submitAndTranscribeAudio = async () => {
     const formData = new FormData();
-    formData.append('audio_file', recordFile);
-
-    console.log(URL.createObjectURL(audioUrl));
-    console.log(recordFile);
+    formData.append('audio_file', blob);
 
     try {
       const res = await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/transcribe/`, formData);
       console.log(res);
       const { status, data } = res;
       if (status === 200) {
-        console.log(data);
-        setText(data.text);
+        setResultText(data.text);
       } else {
         throw new Error('something was wrong!');
       }
@@ -98,12 +71,12 @@ export default function AudioRecord() {
           녹음 종료
         </button>
 
-        <button className='bg-teal-900 text-white' onClick={onSubmitAudioFile}>
+        <button className='bg-teal-900 text-white' onClick={submitAndTranscribeAudio}>
           녹음 파일 변환
         </button>
       </div>
       <audio controls ref={audioRef} />
-      <div>{text}</div>
+      <div>{resultText}</div>
     </div>
   );
 }
