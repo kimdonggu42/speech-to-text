@@ -3,13 +3,14 @@
 import axios from 'axios';
 import { useState, useRef } from 'react';
 
+const constraints = { audio: true };
+
 export default function AudioRecord() {
   const [mediaRecorder, setMediaRecorder] = useState<any>(null);
   const [blob, setBlob] = useState<any>(null);
   const [resultText, setResultText] = useState<string>('');
 
   const audioRef = useRef<any>();
-  const constraints = { audio: true };
   const chunks: any = [];
 
   const onRecAudio = async () => {
@@ -43,8 +44,8 @@ export default function AudioRecord() {
 
   const offRecAudio = () => {
     if (mediaRecorder) {
-      mediaRecorder.stop(); // 녹음 중이라면 녹음을 중지
       mediaRecorder.stream.getTracks().forEach((track: any) => track.stop()); // 미디어 스트림 중지(마이크 끄기)
+      mediaRecorder.stop(); // 녹음 중지
     }
   };
 
