@@ -4,11 +4,11 @@ import axios from 'axios';
 import { useState, useRef } from 'react';
 
 export default function Upload() {
-  const [audioFile, setAudioFile] = useState<FormData | null>(null);
+  const [formData, setFormData] = useState<FormData | null>(null);
   const [audioFilePathName, setAudioFilePathName] = useState<string>('');
   const [text, setText] = useState<string>('');
   const [executionTime, setExecutionTime] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isSpeechToTextProcessing, setIsSpeechToTextProcessing] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -18,31 +18,28 @@ export default function Upload() {
 
   const uploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && fileInputRef.current?.value !== undefined) {
-      const mp3File = e.target.files[0];
-      const formData = new FormData();
-      formData.append('file', mp3File);
+      const audioFile = e.target.files[0];
+      const newFormData = new FormData();
+      newFormData.append('file', audioFile);
       setAudioFilePathName(fileInputRef.current?.value);
-      setAudioFile(formData);
+      setFormData(newFormData);
     }
   };
 
   const translate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSpeechToTextProcessing(true);
     try {
-      if (audioFile) {
-        const res = await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/transcribe/`, audioFile);
-        const { status, data } = res;
-        if (status === 200) {
-          setText(data.text);
-          setExecutionTime(data.execution_time_seconds);
-          setIsLoading(false);
-        }
-      } else {
-        alert('오디오 파일을 업로드해주세요.');
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/transcribe/`, formData);
+      const { status, data } = res;
+      if (status === 200) {
+        setText(data.text);
+        setExecutionTime(data.execution_time_seconds);
+        setIsSpeechToTextProcessing(false);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setIsSpeechToTextProcessing(false);
+      alert(err.message);
     }
   };
 
@@ -67,7 +64,7 @@ export default function Upload() {
             텍스트 추출
           </button>
         </form>
-        {isLoading ? (
+        {isSpeechToTextProcessing ? (
           <div>Loading...</div>
         ) : (
           <div className='flex flex-col gap-y-[10px]'>
