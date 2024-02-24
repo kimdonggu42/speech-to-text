@@ -3,6 +3,7 @@
 import axios from 'axios';
 import { useState, useRef } from 'react';
 
+// getUserMedia의 option에서 video와 audio의 기본값은 둘 다 false
 const constraints = { audio: true };
 
 export default function Record() {
@@ -21,6 +22,7 @@ export default function Record() {
     try {
       if (navigator.mediaDevices) {
         // 미디어 스트림 생성 후 생성 한 마이크 미디어 스트림을 인자로 전달하여 MediaRecorder 객체 생성
+        // getUserMedia:
         const mediaStream = await navigator.mediaDevices.getUserMedia(constraints); // 마이크(오디오 트랙) 접근 권한 요청
         const newMediaRecorder = new MediaRecorder(mediaStream);
         setMediaRecorder(newMediaRecorder);

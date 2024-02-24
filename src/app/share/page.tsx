@@ -3,82 +3,104 @@
 import axios from 'axios';
 import { useState, useRef } from 'react';
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
+// getDisplayMedia의 option에서 video의 기본값은 true, audio의 기본값은 false
+const constraints = { audio: true };
 
 export default function Share() {
   const [mediaRecorder, setMediaRecorder] = useState<any>(null);
-  // const [audioChunks, setAudioChunks] = useState<any>([]);
-  const [transcriptionResult, setTranscriptionResult] = useState<any>('');
-  const [executionTime, setExecutionTime] = useState<any>('');
+  const [formData, setFormData] = useState<any>(null);
+  const [text, setText] = useState<string>('');
+  const [executionTime, setExecutionTime] = useState<number>(0);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isSpeechToTextProcessing, setIsSpeechToTextProcessing] = useState<boolean>(false);
 
   const audioRef = useRef<any>();
   const chunks: any = [];
 
-  console.log(chunks);
-
-  const startRecording = async () => {
+  const onRecordingStart = async () => {
+    setIsRecording(true);
     try {
-      const mediaStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
-      });
-      mediaStream.getVideoTracks().forEach((track) => track.stop());
+      if (navigator.mediaDevices) {
+        const mediaStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+        // mediaStream.getVideoTracks().forEach((track) => track.stop());
+        const newMediaRecorder = new MediaRecorder(mediaStream);
+        setMediaRecorder(newMediaRecorder);
 
-      const recorder = new MediaRecorder(mediaStream);
-      setMediaRecorder(recorder);
-      recorder.start();
+        newMediaRecorder.ondataavailable = (e) => {
+          chunks.push(e.data);
+        };
 
-      recorder.ondataavailable = (event) => {
-        // setAudioChunks([...audioChunks, event.data]);
-        chunks.push(event.data);
-        // console.log(event);
-      };
+        newMediaRecorder.onstop = async () => {
+          const newBlob = new Blob(chunks, { type: 'audio/*' });
+          chunks.splice(0);
 
-      recorder.onstop = async () => {
-        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-        // setAudioChunks([]);
-        console.log(audioBlob);
+          const audioUrl = URL.createObjectURL(newBlob);
+          audioRef.current.src = audioUrl;
 
-        const audioUrl = URL.createObjectURL(audioBlob);
-        audioRef.current.src = audioUrl;
+          const newFormData = new FormData();
+          newFormData.append('file', newBlob);
+          setFormData(newFormData);
+        };
 
-        const formData = new FormData();
-        formData.append('file', audioBlob, 'screen_audio.webm');
-
-        try {
-          const res = await axios.post(`${BASE_URL}/transcribe/`, formData);
-          console.log(res);
-          const { status, data } = res;
-          if (status === 200) {
-            setTranscriptionResult(data.text);
-            setExecutionTime(data.execution_time_seconds);
-          } else {
-            throw new Error('something was wrong!');
-          }
-        } catch (err) {
-          console.error(err);
-        }
-      };
-    } catch (err) {
-      console.error('Error sharing screen or recording:', err);
+        newMediaRecorder.start();
+      }
+    } catch (err: any) {
+      alert(err.message);
+      setIsRecording(false);
     }
   };
 
-  const stopRecording = () => {
-    mediaRecorder.stop();
+  const onRecordingStop = () => {
+    if (mediaRecorder) {
+      mediaRecorder.stream.getTracks().forEach((track: any) => track.stop());
+      mediaRecorder.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const submitAndTranscribeAudio = async () => {
+    setIsSpeechToTextProcessing(true);
+    try {
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/transcribe/`, formData);
+      const { status, data } = res;
+      if (status === 200) {
+        setText(data.text);
+        setExecutionTime(data.execution_time_seconds);
+        setIsSpeechToTextProcessing(false);
+      }
+    } catch (err: any) {
+      alert(err.message);
+      setIsSpeechToTextProcessing(false);
+    }
   };
 
   return (
-    <div>
-      <button className='bg-blue-500' onClick={startRecording}>
-        Share Screen and Start Recording
-      </button>
-      <button className='bg-red-500' onClick={stopRecording}>
-        Stop Recording
-      </button>
-      <audio controls ref={audioRef} />
-      <p>{transcriptionResult}</p>
-      <p>{executionTime}</p>
+    <div className='flex h-screen items-center justify-center'>
+      <div className='flex flex-col gap-y-[50px] text-[15px]'>
+        <div className='flex gap-x-[20px]'>
+          {isRecording ? (
+            <button className='bg-blue-500' onClick={onRecordingStop}>
+              화면 공유 및 녹음 종료
+            </button>
+          ) : (
+            <button className='bg-red-500' onClick={onRecordingStart}>
+              화면 공유 및 녹음 시작
+            </button>
+          )}
+          <button className='bg-teal-900 text-white' onClick={submitAndTranscribeAudio}>
+            녹음 파일 변환
+          </button>
+          <audio controls ref={audioRef} />
+        </div>
+        {isSpeechToTextProcessing ? (
+          <div>Loading...</div>
+        ) : (
+          <div className='flex flex-col gap-y-[10px]'>
+            <div>추출한 텍스트: {text}</div>
+            <div>실행 시간: {executionTime}</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
