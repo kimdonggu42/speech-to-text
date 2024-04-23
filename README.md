@@ -1,4 +1,4 @@
-### Text-To-Speech
+### Speech-To-Text
 
 1. [getUserMedia()](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)
 
